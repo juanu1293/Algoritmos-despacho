@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Algoritmos de despacho</title>
+<style>
+  :root{
+    --fondo:#eef1f4; --panel:#ffffff; --tinta:#16202b; --suave:#5d6b79; --linea:#d3dae1;
+    --acento:#1d4ed8; --idle:#e2e7ec;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--fondo);color:var(--tinta);font:15px/1.5 "Segoe UI",system-ui,sans-serif}
+  main{max-width:1050px;margin:0 auto;padding:28px 20px 60px;display:grid;gap:22px}
+  h1{font-size:1.7rem;margin:0 0 2px;letter-spacing:-.02em}
+  h2{font-size:1.05rem;margin:0 0 12px}
+  .sub{color:var(--suave);margin:0}
+  section{background:var(--panel);border:1px solid var(--linea);border-radius:6px;padding:18px}
+  .controles{display:flex;flex-wrap:wrap;gap:16px;align-items:end;margin-bottom:14px}
+  label{display:grid;gap:4px;font-size:.85rem;color:var(--suave)}
+  select,input{font:inherit;padding:7px 9px;border:1px solid var(--linea);border-radius:4px;background:#fff;color:var(--tinta)}
+  input[type=number]{width:84px} input[type=text]{width:90px}
+  .check{display:flex;align-items:center;gap:6px;padding-bottom:8px}
+  .oculto{display:none!important}
+  table{border-collapse:collapse;width:100%}
+  th,td{padding:6px 8px;text-align:left;border-bottom:1px solid var(--linea)}
+  th{font-weight:600;font-size:.85rem;color:var(--suave)}
+  td input{width:100%}
+  button{font:inherit;cursor:pointer;border-radius:4px;padding:8px 14px;border:1px solid var(--linea);background:#fff;color:var(--tinta)}
+  button.primario{background:var(--acento);border-color:var(--acento);color:#fff;font-weight:600}
+  button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--acento);outline-offset:1px}
+  .acciones{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+  .error{color:#b42318;margin-top:10px;min-height:1.2em}
+  .gantt{overflow-x:auto;padding-bottom:6px}
+  .barra{display:flex;height:46px;min-width:max-content}
+  .seg{display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;border-right:2px solid var(--panel);min-width:0}
+  .seg.idle{background:var(--idle);color:var(--suave);font-weight:400;font-size:.8rem}
+  .escala{position:relative;height:22px;min-width:max-content;margin-top:4px;font-size:.78rem;color:var(--suave)}
+  .escala span{position:absolute;transform:translateX(-50%)}
+  .resumen{display:flex;gap:28px;flex-wrap:wrap;margin-top:16px}
+  .resumen div{display:grid}
+  .resumen b{font-size:1.5rem;font-variant-numeric:tabular-nums}
+  .resumen small{color:var(--suave)}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Algoritmos de despacho</h1>
+  </header>
+
+  <section>
+    <h2>Configuración</h2>
+    <div class="controles">
+      <label>Algoritmo
+        <select id="algoritmo">
+          <option value="fcfs">FCFS (Primero en llegar)</option>
+          <option value="sjf">SJF (Trabajo más corto)</option>
+          <option value="prioridad">Prioridad</option>
+          <option value="rr">Round Robin</option>
+        </select>
+      </label>
+      <label id="lblQuantum" class="oculto">Quantum
+        <input type="number" id="quantum" value="2" min="1">
+      </label>
+    </div>
+
+    <table>
+      <thead><tr>
+        <th>Proceso</th><th>Llegada</th><th>Ráfaga</th>
+        <th class="colPrio oculto">Prioridad (menor = mayor)</th><th></th>
+      </tr></thead>
+      <tbody id="filas"></tbody>
+    </table>
+
+    <div class="acciones">
+      <button id="agregar">Agregar proceso</button>
+      <button id="ejemplo">Restaurar ejemplo</button>
+      <button id="simular" class="primario">Simular</button>
+    </div>
+    <div class="error" id="error" role="alert"></div>
+  </section>
+
+  <section id="resultado" class="oculto">
+    <h2>Diagrama de Gantt</h2>
+    <div class="gantt">
+      <div class="barra" id="barra"></div>
+      <div class="escala" id="escala"></div>
+    </div>
+
+    <h2 style="margin-top:22px">Tiempos por proceso</h2>
+    <table>
+      <thead><tr>
+        <th>Proceso</th><th class="num">Llegada</th><th class="num">Ráfaga</th>
+        <th class="num colPrio oculto">Prioridad</th>
+        <th class="num">Finalización</th><th class="num">Retorno</th>
+        <th class="num">Espera</th><th class="num">Respuesta</th>
+      </tr></thead>
+      <tbody id="tabla"></tbody>
+    </table>
+
+    <div class="resumen">
+      <div><b id="pEspera"></b><small>Espera promedio</small></div>
+      <div><b id="pRetorno"></b><small>Retorno promedio</small></div>
+      <div><b id="pRespuesta"></b><small>Respuesta promedio</small></div>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const COLORES = ["#1d4ed8","#0f766e","#b45309","#7c3aed","#be123c","#0369a1","#4d7c0f","#c2410c","#4338ca","#a21caf"];
+const UNIDAD = 34; 
+
+function fila(pid, llegada, rafaga, prio) {
+  const tr = document.createElement("tr");
+  tr.innerHTML = `
+    <td><input type="text" class="pid" value="${pid}" aria-label="Nombre"></td>
+    <td><input type="number" class="llegada" value="${llegada}" min="0" aria-label="Llegada"></td>
+    <td><input type="number" class="rafaga" value="${rafaga}" min="1" aria-label="Ráfaga"></td>
+    <td class="colPrio"><input type="number" class="prio" value="${prio}" aria-label="Prioridad"></td>
+    <td><button class="quitar" aria-label="Quitar proceso">Quitar</button></td>`;
+  tr.querySelector(".quitar").onclick = () => { tr.remove(); renumerar(); };
+  $("#filas").appendChild(tr);
+  actualizarVista();
+}
+
+function renumerar() {
+  document.querySelectorAll("#filas tr").forEach((tr, i) => {
+    const campo = tr.querySelector(".pid");
+    if (/^P\d+$/.test(campo.value.trim())) campo.value = "P" + (i + 1);
+  });
+}
+
+function cargarEjemplo() {
+  $("#filas").innerHTML = "";
+  [["P1",0,5,3],["P2",1,3,1],["P3",2,8,4],["P4",3,6,2]].forEach(p => fila(...p));
+}
+
+function actualizarVista() {
+  const a = $("#algoritmo").value;
+  $("#lblQuantum").classList.toggle("oculto", a !== "rr");
+  document.querySelectorAll(".colPrio").forEach(e => e.classList.toggle("oculto", a !== "prioridad"));
+}
+
+function leerProcesos() {
+  return [...document.querySelectorAll("#filas tr")].map(tr => ({
+    pid: tr.querySelector(".pid").value,
+    llegada: tr.querySelector(".llegada").value,
+    rafaga: tr.querySelector(".rafaga").value,
+    prioridad: tr.querySelector(".prio").value || 0,
+  }));
+}
+
+async function simular() {
+  $("#error").textContent = "";
+  const res = await fetch("/api/simular", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      algoritmo: $("#algoritmo").value,
+      quantum: $("#quantum").value,
+      procesos: leerProcesos(),
+    }),
+  });
+  const datos = await res.json();
+  if (!res.ok) { $("#error").textContent = datos.error; return; }
+  mostrar(datos);
+}
+
+function mostrar({linea, metricas}) {
+  const color = {};
+  metricas.procesos.forEach((p, i) => color[p.pid] = COLORES[i % COLORES.length]);
+
+  const barra = $("#barra"), escala = $("#escala");
+  barra.innerHTML = ""; escala.innerHTML = "";
+  const marcas = new Set();
+  linea.forEach(s => {
+    const d = document.createElement("div");
+    d.className = "seg" + (s.pid === null ? " idle" : "");
+    d.style.width = (s.fin - s.inicio) * UNIDAD + "px";
+    d.style.background = s.pid === null ? "" : color[s.pid];
+    d.textContent = s.pid === null ? "libre" : s.pid;
+    d.title = `${s.pid ?? "CPU libre"}: ${s.inicio} → ${s.fin}`;
+    barra.appendChild(d);
+    marcas.add(s.inicio); marcas.add(s.fin);
+  });
+  const total = linea[linea.length - 1].fin;
+  escala.style.width = total * UNIDAD + "px";
+  [...marcas].forEach(m => {
+    const e = document.createElement("span");
+    e.style.left = m * UNIDAD + "px"; e.textContent = m;
+    escala.appendChild(e);
+  });
+
+  $("#tabla").innerHTML = metricas.procesos.map(p => `
+    <tr><td><b style="color:${color[p.pid]}">${p.pid}</b></td>
+    <td class="num">${p.llegada}</td><td class="num">${p.rafaga}</td>
+    <td class="num colPrio">${p.prioridad}</td>
+    <td class="num">${p.finalizacion}</td><td class="num">${p.retorno}</td>
+    <td class="num">${p.espera}</td><td class="num">${p.respuesta}</td></tr>`).join("");
+  $("#pEspera").textContent = metricas.prom_espera;
+  $("#pRetorno").textContent = metricas.prom_retorno;
+  $("#pRespuesta").textContent = metricas.prom_respuesta;
+
+  $("#resultado").classList.remove("oculto");
+  actualizarVista();
+  $("#resultado").scrollIntoView({behavior: "smooth"});
+}
+
+$("#algoritmo").onchange = actualizarVista;
+$("#agregar").onclick = () => fila("P" + ($("#filas").children.length + 1), 0, 1, 1);
+$("#ejemplo").onclick = cargarEjemplo;
+$("#simular").onclick = simular;
+cargarEjemplo();
+</script>
+</body>
+</html>
